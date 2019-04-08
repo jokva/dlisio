@@ -1,5 +1,8 @@
 set(CMAKE_CXX_STANDARD 11)
 
+add_executable(dlis dlisio.cpp)
+target_link_libraries(dlis dlisio fmt)
+
 add_executable(dlis-describe describe.cpp)
 target_link_libraries(dlis-describe dlisio)
 
