@@ -329,19 +329,22 @@ void read_fdata(const char* pre_fmt,
                 const char* post_fmt,
                 dl::stream& file,
                 const std::vector< int >& indices,
-                py::buffer dstb)
+                py::buffer out_array)
 noexcept (false) {
     // TODO: reverse fingerprint to skip bytes ahead-of-time
     /*
      * TODO: error has already been checked (in python), but should be more
      * thorough
      */
-    auto info = dstb.request(true);
-    auto* dst = static_cast< char* >(info.ptr);
+    auto info = out_array.request(true);
+    //auto* dst = static_cast< char* >(info.ptr);
 
-    auto pre_size  = fdata_size(pre_fmt);
-    auto data_size = fdata_size(fmt);
-    auto post_size = fdata_size(post_fmt);
+    const auto pre_size  = fdata_size(pre_fmt);
+    const auto data_size = fdata_size(fmt);
+    const auto post_size = fdata_size(post_fmt);
+
+    auto dst = std::vector< char >();
+    dst.reserve(info.size * info.itemsize);
 
     dl::record record;
     int expected_frameno = 1;
@@ -385,20 +388,26 @@ noexcept (false) {
 
             ptr += pre_size.src;
 
-            dlis_packf(fmt, ptr, dst);
-            dst += data_size.dst;
+            auto* start = dst.data() + dst.size();
+            dst.resize(dst.size() + data_size.dst);
+            dlis_packf(fmt, ptr, start);
             ptr += data_size.src;
             expected_frameno = frameno + 1;
 
             ptr += post_size.src;
-
-            if (ptr != end) {
-                // TODO: lift this restriction (realloc buffers)
-                auto msg = "multiple frames in one FDATA";
-                throw dl::not_implemented(msg);
-            }
         }
     }
+
+    if (info.size * info.itemsize != dst.size()) {
+        // some record had multiple frames, so realloc the numpy array
+        const auto new_size = dst.size() / data_size.dst;
+        assert(new_size > out_array.attr("size").cast< int >());
+        out_array.attr("resize")(new_size);
+        info = out_array.request(true);
+    }
+
+    assert(info.size * info.itemsize == dst.size());
+    std::memcpy(info.ptr, dst.data(), dst.size());
 }
 
 }
@@ -435,9 +444,9 @@ PYBIND11_MODULE(core, m) {
         .def_readonly( "copynumber", &dl::obname::copy )
         .def_readonly( "id",         &dl::obname::id )
         .def(py::init([](int origin, std::uint8_t copynum, std::string id){
-            return dl::obname{dl::origin{origin}, 
+            return dl::obname{dl::origin{origin},
                               dl::ushort{copynum},
-                              dl::ident{id}}; 
+                              dl::ident{id}};
         }))
         .def( "fingerprint",         &dl::obname::fingerprint )
         .def( "__eq__",              &dl::obname::operator == )

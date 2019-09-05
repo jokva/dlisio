@@ -76,6 +76,7 @@ install(CODE "
                 \${root_destdir}
                 --single-version-externally-managed
                 --record record.txt
+                --prefix \"${CMAKE_INSTALL_PREFIX}\"
                 --cmake-executable \"${CMAKE_COMMAND}\"
                 --generator \"${CMAKE_GENERATOR}\"
                 ${DLISIO_PYTHON_BUILD_TYPE}
